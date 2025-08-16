@@ -1,0 +1,44 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Welcome to CraftNode Hosting</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@300;400;500;600&display=swap" rel="stylesheet">
+    <style>
+        body {
+            font-family: 'Poppins', sans-serif;
+            background: linear-gradient(135deg, #f9f9ff 0%, #f0e9ff 100%);
+        }
+        .gradient-text {
+            background: linear-gradient(135deg, #7b2ff7 0%, #a155f2 100%);
+            -webkit-background-clip: text;
+            background-clip: text;
+            color: transparent;
+        }
+    </style>
+</head>
+<body class="min-h-screen flex items-center justify-center p-4">
+    <div class="max-w-2xl w-full bg-white rounded-xl shadow-lg p-8 md:p-12 text-center">
+        <div class="flex justify-center mb-6">
+            <img src="logo.png" alt="CraftNode Logo" class="w-20 h-20 object-contain" onerror="this.style.display='none'">
+        </div>
+        
+        <h1 class="text-3xl md:text-4xl font-semibold text-gray-800 mb-4">
+            Welcome to <span class="gradient-text">CraftNode</span> Hosting
+        </h1>
+        
+        <div class="text-gray-600 mb-8 leading-relaxed">
+            <p class="mb-4">Your website files are located in the panel under <span class="font-medium text-purple-600">Files → WWW folder</span>.</p>
+            <p>Replace this page (<span class="font-mono bg-gray-100 px-2 py-1 rounded text-purple-600">index.html</span>) with your own website files.</p>
+        </div>
+        
+        <div class="bg-purple-50 rounded-lg p-4 border border-purple-100">
+            <p class="text-purple-800 font-medium">Need help? Contact our support team.</p>
+        </div>
+    </div>
+</body>
+</html>
