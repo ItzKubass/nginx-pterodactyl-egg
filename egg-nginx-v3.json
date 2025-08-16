@@ -25,7 +25,7 @@
     },
     "scripts": {
         "installation": {
-            "script": "#!/bin/bash\n\n# ======================\n# HARDCODED GITHUB TOKEN\n# ======================\nGITHUB_TOKEN=\"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\"\n\n# [SETUP] Install necessary packages\necho -e \"[SETUP] Install packages\"\napt-get update -qq > /dev/null 2>&1 && apt-get install -qq > /dev/null 2>&1 -y git wget perl perl-doc fcgiwrap\n\n# Change to server directory\ncd /mnt/server\n\n# [SETUP] Create necessary folders\necho -e \"[SETUP] Create folders\"\nmkdir -p logs tmp www\n\n# Clone the default repository WITH AUTHENTICATION\necho \"[Git] Cloning default repository using authenticated access\"\ngit clone \"https://${GITHUB_TOKEN}@github.com/ItzKubass/pterodactyl-nginx-egg\" /mnt/server/gtemp > /dev/null 2>&1 || { \n    echo \"[Git] Error: Repository clone failed\"; \n    exit 21; \n}\n\n# Copy the www folder and files from the temporary repository to the target directory\necho \"[Git] Copying folder and files from default repository.\"\ncp -r /mnt/server/gtemp/nginx /mnt/server || { echo \"[Git] Error: Copying 'nginx' folder failed.\"; exit 22; }\ncp -r /mnt/server/gtemp/php /mnt/server || { echo \"[Git] Error: Copying 'php' folder failed.\"; exit 22; }\ncp -r /mnt/server/gtemp/modules /mnt/server || { echo \"[Git] Error: Copying 'modules' folder failed.\"; exit 22; }\ncp /mnt/server/gtemp/start-modules.sh /mnt/server || { echo \"[Git] Error: Copying 'start-modules.sh' file failed.\"; exit 22; }\ncp /mnt/server/gtemp/LICENSE /mnt/server || { echo \"[Git] Error: Copying 'LICENSE' file failed.\"; exit 22; }\nchmod +x /mnt/server/start-modules.sh\nfind /mnt/server/modules -type f -name \"*.sh\" -exec chmod +x {} \\;\n\n# Remove the temporary cloned repository\nrm -rf /mnt/server/gtemp\n\n# Check if GIT_ADDRESS is set\nif [ -z \"${GIT_ADDRESS}\" ]; then\n    echo \"[Git] Info: GIT_ADDRESS is not set.\"\n    echo \"[Git] Git operations are disabled. Skipping Git actions.\"\nelse\n    # Add .git suffix to GIT_ADDRESS if it's not present\n    if [[ ${GIT_ADDRESS} != *.git ]]; then\n        GIT_ADDRESS=\"${GIT_ADDRESS}.git\"\n        echo \"[Git] Added .git suffix to GIT_ADDRESS: ${GIT_ADDRESS}\"\n    fi\n\n    # Always use the hardcoded token for user repos too\n    GIT_DOMAIN=$(echo \"${GIT_ADDRESS}\" | awk -F/ '{print $3}')\n    GIT_PATH=$(echo \"${GIT_ADDRESS}\" | awk -F/ '{print $4}')\n    GIT_AUTH_URL=\"https://${GITHUB_TOKEN}@${GIT_DOMAIN}/${GIT_PATH}\"\n    \n    echo \"[Git] Using authenticated access for user repository\"\n\n    # Check if the 'www' directory exists, if not create it\n    if [ ! -d /mnt/server/www ]; then\n        echo \"[Git] Creating /mnt/server/www directory.\"\n        mkdir -p /mnt/server/www\n    else\n        rm -R /mnt/server/www && mkdir -p /mnt/server/www\n    fi\n\n    cd /mnt/server/www || { echo \"[Git] Error: Could not access /mnt/server/www directory.\"; exit 1; }\n\n    if [ \"$(ls -A /mnt/server/www)\" ]; then\n        echo \"[Git] /mnt/server/www directory is not empty.\"\n        \n        # Check if .git directory exists in 'www'\n        if [ -d .git ]; then\n            echo \"[Git] .git directory exists in 'www'.\"\n\n            # Check if .git/config exists in 'www'\n            if [ -f .git/config ]; then\n                echo \"[Git] Loading repository info from git config in 'www'.\"\n                ORIGIN=$(git config --get remote.origin.url)\n            else\n                echo \"[Git] Error: .git/config not found in 'www'. The directory may contain files, but it's not a valid Git repository.\"\n                exit 10\n            fi\n        else\n            echo \"[Git] Error: Directory contains files but no Git repository found in 'www'.\"\n            exit 11\n        fi\n\n        # Check if origin matches the provided GIT_AUTH_URL\n        if [ \"${ORIGIN}\" == \"${GIT_AUTH_URL}\" ]; then\n            echo \"[Git] Repository origin matches. Pulling latest changes from repository.\"\n            git pull || { echo \"[Git] Error: git pull failed for 'www'.\"; exit 12; }\n        else\n            echo \"[Git] Error: Repository origin does not match the provided repository in 'www'.\"\n            exit 13\n        fi\n    else\n        # The directory is empty, clone the repository\n        echo \"[Git] /mnt/server/www directory is empty. Cloning repository.\"\n        git clone ${GIT_AUTH_URL} . > /dev/null 2>&1 && echo \"[Git] Repository cloned successfully.\" || { echo \"[Git] Error: git clone failed for 'www'.\"; exit 14; }\n        \n        # Checkout specific branch if specified\n        if [ -n \"${BRANCH}\" ]; then\n            echo \"[Git] Checking out branch: ${BRANCH}\"\n            git checkout ${BRANCH} || { echo \"[Git] Error: Failed to checkout branch ${BRANCH}\"; exit 16; }\n        fi\n    fi\nfi\n\n# Check if WordPress should be installed\nif [ \"${WORDPRESS}\" == \"true\" ] || [ \"${WORDPRESS}\" == \"1\" ]; then\n    echo \"[SETUP] Install WordPress\"\n    cd /mnt/server/www\n    wget -q http://wordpress.org/latest.tar.gz > /dev/null 2>&1 || { echo \"[SETUP] Error: Downloading WordPress failed.\"; exit 17; }\n    tar xzf latest.tar.gz >/dev/null 2>&1\n    mv wordpress/* .\n    rm -rf wordpress latest.tar.gz\n    echo \"[SETUP] WordPress installed - http://ip:port/wp-admin\"\nelif [ -z \"${GIT_ADDRESS}\" ]; then\n    # Create custom HTML welcome page if WordPress is not installed\n    echo \"[SETUP] Creating CraftNode welcome page\"\n    cat > \"www/index.html\" << 'EOL'\n<!DOCTYPE html>\n<html lang=\"en\">\n<head>\n    <meta charset=\"UTF-8\">\n    <meta name=\"viewport\" content=\"width=device-width, initial-scale=1.0\">\n    <title>Welcome to CraftNode Hosting</title>\n    <script src=\"https://cdn.tailwindcss.com\"></script>\n    <link rel=\"preconnect\" href=\"https://fonts.googleapis.com\">\n    <link rel=\"preconnect\" href=\"https://fonts.gstatic.com\" crossorigin>\n    <link href=\"https://fonts.googleapis.com/css2?family=Poppins:wght@300;400;500;600&display=swap\" rel=\"stylesheet\">\n    <style>\n        body {\n            font-family: 'Poppins', sans-serif;\n            background: linear-gradient(135deg, #f9f9ff 0%, #f0e9ff 100%);\n        }\n        .gradient-text {\n            background: linear-gradient(135deg, #7b2ff7 0%, #a155f2 100%);\n            -webkit-background-clip: text;\n            background-clip: text;\n            color: transparent;\n        }\n    </style>\n</head>\n<body class=\"min-h-screen flex items-center justify-center p-4\">\n    <div class=\"max-w-2xl w-full bg-white rounded-xl shadow-lg p-8 md:p-12 text-center\">\n        <div class=\"flex justify-center mb-6\">\n            <img src=\"logo.png\" alt=\"CraftNode Logo\" class=\"w-20 h-20 object-contain\" onerror=\"this.style.display='none'\">\n        </div>\n        \n        <h1 class=\"text-3xl md:text-4xl font-semibold text-gray-800 mb-4\">\n            Welcome to <span class=\"gradient-text\">CraftNode</span> Hosting\n        </h1>\n        \n        <div class=\"text-gray-600 mb-8 leading-relaxed\">\n            <p class=\"mb-4\">Your website files are located in the panel under <span class=\"font-medium text-purple-600\">Files → WWW folder</span>.</p>\n            <p>Replace this page (<span class=\"font-mono bg-gray-100 px-2 py-1 rounded text-purple-600\">index.html</span>) with your own website files.</p>\n        </div>\n        \n        <div class=\"bg-purple-50 rounded-lg p-4 border border-purple-100\">\n            <p class=\"text-purple-800 font-medium\">Need help? Contact our support team.</p>\n        </div>\n    </div>\n</body>\n</html>\nEOL\n    echo \"[SETUP] Created default welcome page at www/index.html\"\nfi\n\necho -e \"[DONE] Everything has been installed successfully\"\necho -e \"[INFO] You can now start the nginx web server\"",
+            "script": "#!/bin/bash\n\n# ======================\n# HARDCODED GITHUB TOKEN\n# ======================\nGITHUB_TOKEN=\"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\"\n\n# [SETUP] Install necessary packages\necho -e \"[SETUP] Install packages\"\napt-get update -qq > /dev/null 2>&1 && apt-get install -qq > /dev/null 2>&1 -y git wget perl perl-doc fcgiwrap\n\n# Add VERSION file\nwget -q -O - https://api.tavuru.de/version/Ym0T/pterodactyl-nginx-egg | grep -o '\"version\":\"[^\"]*\"' | cut -d'\"' -f4 | head -1 > /mnt/server/VERSION\n\n# Change to server directory\ncd /mnt/server\n\n# [SETUP] Create necessary folders\necho -e \"[SETUP] Create folders\"\nmkdir -p logs tmp www\n\n# Clone the default repository WITH AUTHENTICATION\necho \"[Git] Cloning default repository using authenticated access\"\ngit clone \"https://${GITHUB_TOKEN}@github.com/ItzKubass/pterodactyl-nginx-egg\" /mnt/server/gtemp > /dev/null 2>&1 || { \n    echo \"[Git] Error: Repository clone failed\"; \n    exit 21; \n}\n\n# Copy the www folder and files from the temporary repository to the target directory\necho \"[Git] Copying folder and files from default repository.\"\ncp -r /mnt/server/gtemp/nginx /mnt/server || { echo \"[Git] Error: Copying 'nginx' folder failed.\"; exit 22; }\ncp -r /mnt/server/gtemp/php /mnt/server || { echo \"[Git] Error: Copying 'php' folder failed.\"; exit 22; }\ncp -r /mnt/server/gtemp/modules /mnt/server || { echo \"[Git] Error: Copying 'modules' folder failed.\"; exit 22; }\ncp /mnt/server/gtemp/start-modules.sh /mnt/server || { echo \"[Git] Error: Copying 'start-modules.sh' file failed.\"; exit 22; }\ncp /mnt/server/gtemp/LICENSE /mnt/server || { echo \"[Git] Error: Copying 'LICENSE' file failed.\"; exit 22; }\nchmod +x /mnt/server/start-modules.sh\nfind /mnt/server/modules -type f -name \"*.sh\" -exec chmod +x {} \\;\n\n# Remove the temporary cloned repository\nrm -rf /mnt/server/gtemp\n\n# Check if GIT_ADDRESS is set\nif [ -z \"${GIT_ADDRESS}\" ]; then\n    echo \"[Git] Info: GIT_ADDRESS is not set.\"\n    echo \"[Git] Git operations are disabled. Skipping Git actions.\"\nelse\n    # Add .git suffix to GIT_ADDRESS if it's not present\n    if [[ ${GIT_ADDRESS} != *.git ]]; then\n        GIT_ADDRESS=\"${GIT_ADDRESS}.git\"\n        echo \"[Git] Added .git suffix to GIT_ADDRESS: ${GIT_ADDRESS}\"\n    fi\n\n    # Always use the hardcoded token for user repos too\n    GIT_DOMAIN=$(echo \"${GIT_ADDRESS}\" | awk -F/ '{print $3}')\n    GIT_PATH=$(echo \"${GIT_ADDRESS}\" | awk -F/ '{print $4}')\n    GIT_AUTH_URL=\"https://${GITHUB_TOKEN}@${GIT_DOMAIN}/${GIT_PATH}\"\n    \n    echo \"[Git] Using authenticated access for user repository\"\n\n    # Check if the 'www' directory exists, if not create it\n    if [ ! -d /mnt/server/www ]; then\n        echo \"[Git] Creating /mnt/server/www directory.\"\n        mkdir -p /mnt/server/www\n    else\n        rm -R /mnt/server/www && mkdir -p /mnt/server/www\n    fi\n\n    cd /mnt/server/www || { echo \"[Git] Error: Could not access /mnt/server/www directory.\"; exit 1; }\n\n    if [ \"$(ls -A /mnt/server/www)\" ]; then\n        echo \"[Git] /mnt/server/www directory is not empty.\"\n        \n        # Check if .git directory exists in 'www'\n        if [ -d .git ]; then\n            echo \"[Git] .git directory exists in 'www'.\"\n\n            # Check if .git/config exists in 'www'\n            if [ -f .git/config ]; then\n                echo \"[Git] Loading repository info from git config in 'www'.\"\n                ORIGIN=$(git config --get remote.origin.url)\n            else\n                echo \"[Git] Error: .git/config not found in 'www'. The directory may contain files, but it's not a valid Git repository.\"\n                exit 10\n            fi\n        else\n            echo \"[Git] Error: Directory contains files but no Git repository found in 'www'.\"\n            exit 11\n        fi\n\n        # Check if origin matches the provided GIT_AUTH_URL\n        if [ \"${ORIGIN}\" == \"${GIT_AUTH_URL}\" ]; then\n            echo \"[Git] Repository origin matches. Pulling latest changes from repository.\"\n            git pull || { echo \"[Git] Error: git pull failed for 'www'.\"; exit 12; }\n        else\n            echo \"[Git] Error: Repository origin does not match the provided repository in 'www'.\"\n            exit 13\n        fi\n    else\n        # The directory is empty, clone the repository\n        echo \"[Git] /mnt/server/www directory is empty. Cloning repository.\"\n        git clone ${GIT_AUTH_URL} . > /dev/null 2>&1 && echo \"[Git] Repository cloned successfully.\" || { echo \"[Git] Error: git clone failed for 'www'.\"; exit 14; }\n        \n        # Checkout specific branch if specified\n        if [ -n \"${BRANCH}\" ]; then\n            echo \"[Git] Checking out branch: ${BRANCH}\"\n            git checkout ${BRANCH} || { echo \"[Git] Error: Failed to checkout branch ${BRANCH}\"; exit 16; }\n        fi\n    fi\nfi\n\n# Check if WordPress should be installed\nif [ \"${WORDPRESS}\" == \"true\" ] || [ \"${WORDPRESS}\" == \"1\" ]; then\n    echo \"[SETUP] Install WordPress\"\n    cd /mnt/server/www\n    wget -q http://wordpress.org/latest.tar.gz > /dev/null 2>&1 || { echo \"[SETUP] Error: Downloading WordPress failed.\"; exit 17; }\n    tar xzf latest.tar.gz >/dev/null 2>&1\n    mv wordpress/* .\n    rm -rf wordpress latest.tar.gz\n    echo \"[SETUP] WordPress installed - http://ip:port/wp-admin\"\nelif [ -z \"${GIT_ADDRESS}\" ]; then\n    # Create custom HTML welcome page if WordPress is not installed\n    echo \"[SETUP] Creating CraftNode welcome page\"\n    cat > \"www/index.html\" << 'EOL'\n<!DOCTYPE html>\n<html lang=\"en\">\n<head>\n    <meta charset=\"UTF-8\">\n    <meta name=\"viewport\" content=\"width=device-width, initial-scale=1.0\">\n    <title>Welcome to CraftNode Hosting</title>\n    <script src=\"https://cdn.tailwindcss.com\"></script>\n    <link rel=\"preconnect\" href=\"https://fonts.googleapis.com\">\n    <link rel=\"preconnect\" href=\"https://fonts.gstatic.com\" crossorigin>\n    <link href=\"https://fonts.googleapis.com/css2?family=Poppins:wght@300;400;500;600&display=swap\" rel=\"stylesheet\">\n    <style>\n        body {\n            font-family: 'Poppins', sans-serif;\n            background: linear-gradient(135deg, #f9f9ff 0%, #f0e9ff 100%);\n        }\n        .gradient-text {\n            background: linear-gradient(135deg, #7b2ff7 0%, #a155f2 100%);\n            -webkit-background-clip: text;\n            background-clip: text;\n            color: transparent;\n        }\n    </style>\n</head>\n<body class=\"min-h-screen flex items-center justify-center p-4\">\n    <div class=\"max-w-2xl w-full bg-white rounded-xl shadow-lg p-8 md:p-12 text-center\">\n        <div class=\"flex justify-center mb-6\">\n            <img src=\"logo.png\" alt=\"CraftNode Logo\" class=\"w-20 h-20 object-contain\" onerror=\"this.style.display='none'\">\n        </div>\n        \n        <h1 class=\"text-3xl md:text-4xl font-semibold text-gray-800 mb-4\">\n            Welcome to <span class=\"gradient-text\">CraftNode</span> Hosting\n        </h1>\n        \n        <div class=\"text-gray-600 mb-8 leading-relaxed\">\n            <p class=\"mb-4\">Your website files are located in the panel under <span class=\"font-medium text-purple-600\">Files → WWW folder</span>.</p>\n            <p>Replace this page (<span class=\"font-mono bg-gray-100 px-2 py-1 rounded text-purple-600\">index.html</span>) with your own website files.</p>\n        </div>\n        \n        <div class=\"bg-purple-50 rounded-lg p-4 border border-purple-100\">\n            <p class=\"text-purple-800 font-medium\">Need help? Contact our support team.</p>\n        </div>\n    </div>\n</body>\n</html>\nEOL\n    echo \"[SETUP] Created default welcome page at www/index.html\"\nfi\n\necho -e \"[DONE] Everything has been installed successfully\"\necho -e \"[INFO] You can now start the nginx web server\"",
             "container": "debian:bookworm-slim",
             "entrypoint": "bash"
         }
@@ -33,7 +33,7 @@
     "variables": [
         {
             "name": "Enable Auto-Update",
-            "description": "Automatically check for updates on startup",
+            "description": "Automatically check for updates on startup using the Tavuru API",
             "env_variable": "AUTOUPDATE_STATUS",
             "default_value": "1",
             "user_viewable": true,
@@ -42,8 +42,18 @@
             "field_type": "text"
         },
         {
+            "name": "Force Auto-Update",
+            "description": "Automatically download and apply updates without confirmation (requires Auto-Update enabled)",
+            "env_variable": "AUTOUPDATE_FORCE",
+            "default_value": "1",
+            "user_viewable": true,
+            "user_editable": true,
+            "rules": "required|boolean",
+            "field_type": "text"
+        },
+        {
             "name": "PHP Version",
-            "description": "Select the correct PHP version (8.1-8.4)",
+            "description": "Select the correct PHP version! See the tag behind the Docker image.",
             "env_variable": "PHP_VERSION",
             "default_value": "8.4",
             "user_viewable": true,
@@ -53,7 +63,7 @@
         },
         {
             "name": "Wordpress",
-            "description": "Enable or disable Wordpress installation",
+            "description": "Enable or disable Wordpress",
             "env_variable": "WORDPRESS",
             "default_value": "0",
             "user_viewable": true,
@@ -62,8 +72,28 @@
             "field_type": "text"
         },
         {
+            "name": "Enable LogCleaner Module",
+            "description": "Set to true to run the log cleanup module on container startup, or false to disable it.",
+            "env_variable": "LOGCLEANER_STATUS",
+            "default_value": "1",
+            "user_viewable": true,
+            "user_editable": true,
+            "rules": "required|boolean",
+            "field_type": "boolean"
+        },
+        {
+            "name": "Enable Git Module",
+            "description": "Set to true to enable the Git update module, or false to disable it.",
+            "env_variable": "GIT_STATUS",
+            "default_value": "0",
+            "user_viewable": true,
+            "user_editable": true,
+            "rules": "required|boolean",
+            "field_type": "text"
+        },
+        {
             "name": "Git Repo Address",
-            "description": "Git repository URL to clone (optional)",
+            "description": "Git repo to clone",
             "env_variable": "GIT_ADDRESS",
             "default_value": "",
             "user_viewable": true,
@@ -73,12 +103,72 @@
         },
         {
             "name": "Git Branch",
-            "description": "Specific branch to checkout (optional)",
+            "description": "What branch to pull from github.",
             "env_variable": "BRANCH",
             "default_value": "",
             "user_viewable": true,
             "user_editable": true,
             "rules": "nullable|string",
+            "field_type": "text"
+        },
+        {
+            "name": "Enable Cloudflare Tunnel",
+            "description": "Set to true to start the Cloudflared tunnel on container startup, or false to skip it.",
+            "env_variable": "CLOUDFLARED_STATUS",
+            "default_value": "0",
+            "user_viewable": true,
+            "user_editable": true,
+            "rules": "required|boolean",
+            "field_type": "text"
+        },
+        {
+            "name": "Cloudflared Tunnel Token",
+            "description": "The authentication token used to connect to the Cloudflare Tunnel service (typically starts with \"ey...\").",
+            "env_variable": "CLOUDFLARED_TOKEN",
+            "default_value": "",
+            "user_viewable": true,
+            "user_editable": true,
+            "rules": "nullable|string|regex:/^[A-Za-z0-9_-]+$/",
+            "field_type": "text"
+        },
+        {
+            "name": "Enable Composer Module",
+            "description": "Enable or disable Composer package installation",
+            "env_variable": "COMPOSER_STATUS",
+            "default_value": "0",
+            "user_viewable": true,
+            "user_editable": true,
+            "rules": "required|boolean",
+            "field_type": "text"
+        },
+        {
+            "name": "Composer Packages",
+            "description": "Space-separated list of Composer packages to install",
+            "env_variable": "COMPOSER_MODULES",
+            "default_value": "",
+            "user_viewable": true,
+            "user_editable": true,
+            "rules": "nullable|string",
+            "field_type": "text"
+        },
+        {
+            "name": "Enable Cron Module",
+            "description": "Enable cron job scheduling for automated tasks like Laravel scheduler",
+            "env_variable": "CRON_STATUS",
+            "default_value": "0",
+            "user_viewable": true,
+            "user_editable": true,
+            "rules": "required|boolean",
+            "field_type": "text"
+        },
+        {
+            "name": "Cron Config File",
+            "description": "Path to crontab configuration file",
+            "env_variable": "CRON_CONFIG_FILE",
+            "default_value": "/home/container/crontab",
+            "user_viewable": true,
+            "user_editable": true,
+            "rules": "required|string",
             "field_type": "text"
         }
     ]
