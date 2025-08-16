@@ -52,10 +52,8 @@ sleep 1
 # Copyright footer
 echo -e " "
 echo -e "\033[0;34m───────────────────────────────────────────────\033[0m"
-echo -e "\033[1;36m© 2023-2025 by Ym0T - Thanks to all contributors\033[0m"
-echo -e "\033[1;36mScript: \033[4;34mhttps://github.com/Ym0T\033[0m"
-echo -e "\033[1;36mLicensed under the MIT License.\033[0m"
-echo -e "\033[1;36mSee the LICENSE file for details.\033[0m"
+echo -e "\033[1;36m© 2024-2025 by CraftNode Hosting\033[0m"
+echo -e "\033[1;36mPowered by Pterodactyl Panel\033[0m"
 echo -e "\033[0;34m───────────────────────────────────────────────\033[0m"
 
 # Start NGINX
